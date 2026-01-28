@@ -43,9 +43,12 @@ export async function extractPriceData(
   flights: Flight[],
   searchParams?: SearchParams
 ): Promise<PriceDataPoint[]> {
-  const priceMap = new Map<string, { total: number; count: number }>();
+  if (flights.length === 0) {
+    return [];
+  }
 
-  // Extract prices for dates that have flights
+  // Group prices by date
+  const priceMap = new Map<string, { total: number; count: number }>();
   flights.forEach((flight) => {
     const price = parseFloat(flight.price.total);
     const date = format(parseISO(flight.itineraries[0].segments[0].departure.at), 'yyyy-MM-dd');
@@ -57,27 +60,18 @@ export async function extractPriceData(
     });
   });
 
-  // If no flights, return empty array
-  if (flights.length === 0) {
-    return [];
-  }
-
-  // Find the earliest and latest flight dates
+  // Find date range
   const flightDates = flights.map((flight) => 
     parseISO(flight.itineraries[0].segments[0].departure.at)
   );
   const earliestDate = new Date(Math.min(...flightDates.map(d => d.getTime())));
   const latestDate = new Date(Math.max(...flightDates.map(d => d.getTime())));
-
-  // Calculate date range: from earliest to 5 days after latest
-  const startDate = earliestDate;
   const endDate = addDays(latestDate, 5);
 
-  // Generate all dates in the range
+  // Build price data array
   const allDates: PriceDataPoint[] = [];
-  let currentDate = new Date(startDate);
+  let currentDate = new Date(earliestDate);
   
-  // First, add dates with existing flight data
   while (currentDate <= endDate) {
     const dateStr = format(currentDate, 'yyyy-MM-dd');
     const flightData = priceMap.get(dateStr);
@@ -91,34 +85,35 @@ export async function extractPriceData(
     currentDate = addDays(currentDate, 1);
   }
 
-  // If search params are provided, fetch prices for dates without flights
+  // Fetch prices for dates without flights
   if (searchParams) {
     const datesToFetch = allDates
       .map((dataPoint, index) => ({ dataPoint, index }))
       .filter(({ dataPoint }) => dataPoint.price === null);
 
-    // Limit concurrent requests to avoid rate limiting (max 5 at a time)
     const BATCH_SIZE = 5;
     for (let i = 0; i < datesToFetch.length; i += BATCH_SIZE) {
       const batch = datesToFetch.slice(i, i + BATCH_SIZE);
-      const batchPromises = batch.map(({ dataPoint, index }) =>
-        getPriceForDate(
-          searchParams.origin,
-          searchParams.destination,
-          dataPoint.date,
-          searchParams.adults
-        ).then((price) => {
+      
+      const promises = batch.map(async ({ dataPoint, index }) => {
+        try {
+          const price = await getPriceForDate(
+            searchParams.origin,
+            searchParams.destination,
+            dataPoint.date,
+            searchParams.adults
+          );
           if (price !== null) {
             allDates[index].price = Math.round(price);
-            allDates[index].count = 1; // Mark as having data
+            allDates[index].count = 1;
           }
-        })
-      );
+        } catch (error) {
+          // Silently fail for optional extended dates
+        }
+      });
 
-      // Wait for batch to complete before starting next batch
-      await Promise.allSettled(batchPromises);
+      await Promise.allSettled(promises);
       
-      // Small delay between batches to avoid rate limiting
       if (i + BATCH_SIZE < datesToFetch.length) {
         await new Promise(resolve => setTimeout(resolve, 200));
       }

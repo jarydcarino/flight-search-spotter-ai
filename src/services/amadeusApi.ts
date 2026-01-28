@@ -1,7 +1,6 @@
 import axios, { AxiosError } from 'axios';
 import { Flight, SearchParams } from '../types/flight';
 
-// Amadeus API configuration
 const AMADEUS_BASE_URL = 'https://test.api.amadeus.com';
 
 interface AmadeusLocation {
@@ -9,15 +8,12 @@ interface AmadeusLocation {
   name: string;
 }
 
-// Note: In production, this should be done server-side for security
-// For this demo, we'll use client-side token generation
 let accessToken: string | null = null;
 let tokenExpiry: number = 0;
 
 async function getAccessToken(): Promise<string> {
   const now = Date.now();
   
-  // Return cached token if still valid
   if (accessToken && now < tokenExpiry) {
     return accessToken;
   }
@@ -45,7 +41,6 @@ async function getAccessToken(): Promise<string> {
     );
 
     accessToken = response.data.access_token;
-    // Set expiry to 5 minutes before actual expiry for safety
     tokenExpiry = now + (response.data.expires_in - 300) * 1000;
     
     if (!accessToken) {
@@ -63,7 +58,6 @@ export async function searchFlights(params: SearchParams): Promise<Flight[]> {
   try {
     const token = await getAccessToken();
     
-    // Build search parameters according to Amadeus API v2 specification
     const searchParams: Record<string, string | number> = {
       originLocationCode: params.origin,
       destinationLocationCode: params.destination,
@@ -71,12 +65,9 @@ export async function searchFlights(params: SearchParams): Promise<Flight[]> {
       adults: params.adults,
     };
 
-    // Add return date only if provided (for round-trip)
     if (params.returnDate) {
       searchParams.returnDate = params.returnDate;
     }
-
-    console.log('Searching flights with params:', searchParams);
 
     const response = await axios.get(
       `${AMADEUS_BASE_URL}/v2/shopping/flight-offers`,
@@ -92,7 +83,6 @@ export async function searchFlights(params: SearchParams): Promise<Flight[]> {
   } catch (error) {
     const axiosError = error as AxiosError<{ errors?: Array<{ detail?: string; source?: { parameter?: string } }> }>;
     
-    // Log detailed error information
     if (axiosError.response) {
       console.error('API Error Response:', {
         status: axiosError.response.status,
@@ -104,12 +94,10 @@ export async function searchFlights(params: SearchParams): Promise<Flight[]> {
     }
     
     if (axiosError.response?.status === 401) {
-      // Token expired, try again
       accessToken = null;
       return searchFlights(params);
     }
     
-    // Extract detailed error message
     const errorDetails = axiosError.response?.data?.errors;
     let errorMessage = 'Failed to search flights. Please check your API credentials and try again.';
     
@@ -125,10 +113,6 @@ export async function searchFlights(params: SearchParams): Promise<Flight[]> {
   }
 }
 
-/**
- * Fetch flight prices for a specific date (used for price trends)
- * Returns the minimum price found for that date
- */
 export async function getPriceForDate(
   origin: string,
   destination: string,
@@ -160,17 +144,14 @@ export async function getPriceForDate(
       return null;
     }
 
-    // Return the minimum price for that date
     const prices = flights.map((flight: Flight) => parseFloat(flight.price.total));
     return Math.min(...prices);
   } catch (error) {
     const axiosError = error as AxiosError;
-    // Silently fail for extended date queries - they're optional
     if (axiosError.response?.status !== 401) {
       console.warn(`Failed to fetch price for date ${date}:`, error);
       return null;
     }
-    // Token expired, try again
     accessToken = null;
     return getPriceForDate(origin, destination, date, adults);
   }
@@ -202,7 +183,6 @@ export async function getAirportSuggestions(query: string): Promise<Array<{ iata
     }));
   } catch (error) {
     const axiosError = error as AxiosError;
-    // Log error but don't throw - return empty array so popular airports can still be shown
     if (axiosError.response?.status !== 400) {
       console.error('Error getting airport suggestions:', error);
     }

@@ -45,61 +45,71 @@ export default function SearchForm({ onSearch, loading = false }: SearchFormProp
   const [destinationLoading, setDestinationLoading] = useState(false);
 
   useEffect(() => {
-    // Always show filtered popular airports
     const filteredPopular = filterPopularAirports(originInput);
     
-    if (originInput.length >= 2) {
-      setOriginLoading(true);
-      const timer = setTimeout(() => {
-        getAirportSuggestions(originInput).then((apiResults) => {
-          // Combine popular airports with API results, removing duplicates
-          const combined = [...filteredPopular];
-          apiResults.forEach((apiResult) => {
-            if (!combined.some((item) => item.iataCode === apiResult.iataCode)) {
-              combined.push(apiResult);
-            }
-          });
-          setOriginOptions(combined);
-          setOriginLoading(false);
-        });
-      }, 300);
-      return () => {
-        clearTimeout(timer);
-        setOriginLoading(false);
-      };
-    } else {
-      // Show filtered popular airports when input is less than 2 characters
+    if (originInput.length < 2) {
       setOriginOptions(filteredPopular);
+      return;
     }
+
+    setOriginLoading(true);
+    const timer = setTimeout(async () => {
+      try {
+        const apiResults = await getAirportSuggestions(originInput);
+        const combined = [...filteredPopular];
+        
+        apiResults.forEach((apiResult) => {
+          if (!combined.some((item) => item.iataCode === apiResult.iataCode)) {
+            combined.push(apiResult);
+          }
+        });
+        
+        setOriginOptions(combined);
+      } catch (error) {
+        setOriginOptions(filteredPopular);
+      } finally {
+        setOriginLoading(false);
+      }
+    }, 300);
+
+    return () => {
+      clearTimeout(timer);
+      setOriginLoading(false);
+    };
   }, [originInput]);
 
   useEffect(() => {
-    // Always show filtered popular airports
     const filteredPopular = filterPopularAirports(destinationInput);
     
-    if (destinationInput.length >= 2) {
-      setDestinationLoading(true);
-      const timer = setTimeout(() => {
-        getAirportSuggestions(destinationInput).then((apiResults) => {
-          // Combine popular airports with API results, removing duplicates
-          const combined = [...filteredPopular];
-          apiResults.forEach((apiResult) => {
-            if (!combined.some((item) => item.iataCode === apiResult.iataCode)) {
-              combined.push(apiResult);
-            }
-          });
-          setDestinationOptions(combined);
-          setDestinationLoading(false);
-        });
-      }, 300);
-      return () => {
-        clearTimeout(timer);
-        setDestinationLoading(false);
-      };
-    } else {
-      // Show filtered popular airports when input is less than 2 characters
+    if (destinationInput.length < 2) {
       setDestinationOptions(filteredPopular);
+      return;
     }
+
+    setDestinationLoading(true);
+    const timer = setTimeout(async () => {
+      try {
+        const apiResults = await getAirportSuggestions(destinationInput);
+        const combined = [...filteredPopular];
+        
+        apiResults.forEach((apiResult) => {
+          if (!combined.some((item) => item.iataCode === apiResult.iataCode)) {
+            combined.push(apiResult);
+          }
+        });
+        
+        setDestinationOptions(combined);
+      } catch (error) {
+        setDestinationOptions(filteredPopular);
+      } finally {
+        setDestinationLoading(false);
+      }
+    }, 300);
+
+    return () => {
+      clearTimeout(timer);
+      setDestinationLoading(false);
+    };
   }, [destinationInput]);
 
   const handleTripTypeChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -113,12 +123,10 @@ export default function SearchForm({ onSearch, loading = false }: SearchFormProp
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Validation
     if (!origin || !destination || !departureDate) {
       return;
     }
 
-    // For round-trip, return date is required
     if (tripType === 'round-trip' && !returnDate) {
       alert('Please select a return date for round-trip flights');
       return;
@@ -131,12 +139,10 @@ export default function SearchForm({ onSearch, loading = false }: SearchFormProp
       adults,
     };
 
-    // Add return date for round-trip
     if (tripType === 'round-trip' && returnDate) {
       params.returnDate = returnDate.toISOString().split('T')[0];
     }
 
-    console.log('Submitting search with params:', params);
     onSearch(params);
   };
 

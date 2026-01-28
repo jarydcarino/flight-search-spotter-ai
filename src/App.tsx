@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Container, Box, Typography, AppBar, Toolbar, Grid } from '@mui/material';
 import { FlightTakeoff } from '@mui/icons-material';
 import { ThemeProvider, createTheme, CssBaseline } from '@mui/material';
@@ -6,7 +6,7 @@ import SearchForm from './components/SearchForm';
 import FlightResults from './components/FlightResults';
 import PriceGraph from './components/PriceGraph';
 import FiltersComponent from './components/Filters';
-import { SearchParams, Flight, Filters } from './types/flight';
+import { SearchParams, Flight, Filters, PriceDataPoint } from './types/flight';
 import { searchFlights } from './services/amadeusApi';
 import { filterFlights, extractPriceData } from './utils/flightUtils';
 
@@ -38,7 +38,7 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
   const [searchParams, setSearchParams] = useState<SearchParams | null>(null);
-  const [priceData, setPriceData] = useState<import('./types/flight').PriceDataPoint[]>([]);
+  const [priceData, setPriceData] = useState<PriceDataPoint[]>([]);
   const [loadingPrices, setLoadingPrices] = useState(false);
   const [filters, setFilters] = useState<Filters>({
     stops: null,
@@ -51,35 +51,30 @@ function App() {
     setError(null);
     setHasSearched(true);
     setSearchParams(params);
-    setFilters({
-      stops: null,
-      maxPrice: null,
-      airlines: [],
-    });
+    setFilters({ stops: null, maxPrice: null, airlines: [] });
 
     try {
       const results = await searchFlights(params);
       setFlights(results);
       
-      // Fetch extended price data in the background
       if (results.length > 0) {
         setLoadingPrices(true);
-        extractPriceData(results, params)
-          .then((data) => {
-            setPriceData(data);
-            setLoadingPrices(false);
-          })
-          .catch((err) => {
-            console.error('Error fetching extended price data:', err);
-            // Fallback to basic price data (without extended dates)
-            extractPriceData(results, undefined).then(setPriceData);
-            setLoadingPrices(false);
-          });
+        try {
+          const data = await extractPriceData(results, params);
+          setPriceData(data);
+        } catch (err) {
+          console.error('Error fetching extended price data:', err);
+          const basicData = await extractPriceData(results, undefined);
+          setPriceData(basicData);
+        } finally {
+          setLoadingPrices(false);
+        }
       } else {
         setPriceData([]);
       }
-    } catch (err: any) {
-      setError(err.message || 'Failed to search flights');
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to search flights';
+      setError(errorMessage);
       setFlights([]);
       setPriceData([]);
     } finally {
@@ -91,31 +86,34 @@ function App() {
     return filterFlights(flights, filters);
   }, [flights, filters]);
 
-  // Update price data when filters change (but keep extended dates)
   useEffect(() => {
-    if (filteredFlights.length > 0 && searchParams) {
+    const updatePriceData = async () => {
+      if (filteredFlights.length === 0) {
+        setPriceData([]);
+        return;
+      }
+
       setLoadingPrices(true);
-      extractPriceData(filteredFlights, searchParams)
-        .then((data) => {
-          setPriceData(data);
-          setLoadingPrices(false);
-        })
-        .catch((err) => {
-          console.error('Error updating price data:', err);
-          extractPriceData(filteredFlights, undefined).then(setPriceData);
-          setLoadingPrices(false);
-        });
-    } else if (filteredFlights.length > 0) {
-      extractPriceData(filteredFlights, undefined).then(setPriceData);
-    } else {
-      setPriceData([]);
-    }
+      try {
+        const data = searchParams 
+          ? await extractPriceData(filteredFlights, searchParams)
+          : await extractPriceData(filteredFlights, undefined);
+        setPriceData(data);
+      } catch (err) {
+        console.error('Error updating price data:', err);
+        const basicData = await extractPriceData(filteredFlights, undefined);
+        setPriceData(basicData);
+      } finally {
+        setLoadingPrices(false);
+      }
+    };
+
+    updatePriceData();
   }, [filteredFlights, searchParams]);
 
-  // Memoize filter change handler to prevent unnecessary re-renders
-  const handleFiltersChange = useCallback((newFilters: Filters) => {
+  const handleFiltersChange = (newFilters: Filters) => {
     setFilters(newFilters);
-  }, []);
+  };
 
   return (
     <ThemeProvider theme={theme}>

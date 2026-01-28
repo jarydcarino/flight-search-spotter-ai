@@ -1,4 +1,3 @@
-import { useMemo } from 'react';
 import {
   Paper,
   Typography,
@@ -30,16 +29,13 @@ export default function PriceGraph({ data, currency = 'USD', loading = false }: 
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
-  const chartData = useMemo(() => {
-    return data.map((point) => ({
-      ...point,
-      dateLabel: format(parseISO(point.date), 'MMM dd'),
-      fullDate: format(parseISO(point.date), 'MMM dd, yyyy'),
-      hasFlights: point.count > 0,
-      // Use null for dates without flights so the line doesn't connect
-      price: point.count > 0 ? point.price : null,
-    }));
-  }, [data]);
+  const chartData = data.map((point) => ({
+    ...point,
+    dateLabel: format(parseISO(point.date), 'MMM dd'),
+    fullDate: format(parseISO(point.date), 'MMM dd, yyyy'),
+    hasFlights: point.count > 0,
+    price: point.count > 0 ? point.price : null,
+  }));
 
   if (loading) {
     return (

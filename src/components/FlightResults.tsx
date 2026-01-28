@@ -18,7 +18,7 @@ import {
   AirlineStops,
   SearchOff,
 } from '@mui/icons-material';
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Flight } from '../types/flight';
 import { formatDuration, formatPrice } from '../utils/flightUtils';
 import { format, parseISO } from 'date-fns';
@@ -39,28 +39,14 @@ export default function FlightResults({ flights, loading, error }: FlightResults
     setPage(1);
   }, [flights]);
 
-  // Calculate pagination
-  const totalPages = useMemo(() => {
-    return Math.ceil(flights.length / ITEMS_PER_PAGE);
-  }, [flights.length]);
-
-  // Get paginated flights
-  const paginatedFlights = useMemo(() => {
-    const startIndex = (page - 1) * ITEMS_PER_PAGE;
-    const endIndex = startIndex + ITEMS_PER_PAGE;
-    return flights.slice(startIndex, endIndex);
-  }, [flights, page]);
-
-  // Calculate display range
-  const displayRange = useMemo(() => {
-    const start = (page - 1) * ITEMS_PER_PAGE + 1;
-    const end = Math.min(page * ITEMS_PER_PAGE, flights.length);
-    return { start, end };
-  }, [page, flights.length]);
+  const totalPages = Math.ceil(flights.length / ITEMS_PER_PAGE);
+  const startIndex = (page - 1) * ITEMS_PER_PAGE;
+  const paginatedFlights = flights.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  const displayStart = startIndex + 1;
+  const displayEnd = Math.min(page * ITEMS_PER_PAGE, flights.length);
 
   const handlePageChange = (_: React.ChangeEvent<unknown>, value: number) => {
     setPage(value);
-    // Scroll to top of results when page changes
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -137,7 +123,7 @@ export default function FlightResults({ flights, loading, error }: FlightResults
         </Typography>
         {flights.length > ITEMS_PER_PAGE && (
           <Typography variant="body2" color="text.secondary">
-            Showing {displayRange.start}-{displayRange.end} of {flights.length}
+            Showing {displayStart}-{displayEnd} of {flights.length}
           </Typography>
         )}
       </Box>
